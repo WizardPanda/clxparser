@@ -30,13 +30,6 @@ pip install -e .
 > pip install -e . --no-deps
 > ```
 
-可选扩展：
-
-```bash
-pip install -e ".[image]"    # tifffile + Pillow（独立的图像读取器）
-pip install -e ".[test]"     # pytest
-```
-
 ---
 
 ## 2. 快速上手

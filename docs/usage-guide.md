@@ -34,13 +34,6 @@ pip install -e .
 > pip install -e . --no-deps
 > ```
 
-Optional extras:
-
-```bash
-pip install -e ".[image]"    # tifffile + Pillow (independent image readers)
-pip install -e ".[test]"     # pytest
-```
-
 ---
 
 ## 2. Quickstart
