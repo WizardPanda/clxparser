@@ -12,6 +12,15 @@ instrument software writes out, and the exported TIFFs are **pixel-identical**
 to the instrument's own export (same 16-bit pixel data in a clean, standard
 TIFF container).
 
+## Documentation
+
+- **[Usage & API reference](docs/usage-guide.md)** — installation, complete
+  Python API, CLI reference, export formats, JSON metadata schema, and
+  troubleshooting.
+- **[`.clx` file format specification](docs/clx-format-spec.md)** — the
+  reverse-engineered binary layout (header, version block, image descriptors,
+  pixel data, trailer) with known unknowns and a portability warning.
+
 ```
 pip install .
 # or, from the source tree:
@@ -131,6 +140,7 @@ clxparser/
     png.py         dependency-free PNG writer (16-bit lossless + 8-bit preview)
     export.py      bulk export + metadata JSON
     cli.py         argparse CLI (info / extract / preview)
+docs/              format spec, usage/API reference, landing page
 tests/             unittest suite, incl. pixel-identity checks vs real exports
 ```
 
