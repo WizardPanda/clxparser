@@ -20,6 +20,8 @@ TIFF container).
 - **[`.clx` file format specification](docs/clx-format-spec.md)** — the
   reverse-engineered binary layout (header, version block, image descriptors,
   pixel data, trailer) with known unknowns and a portability warning.
+- **中文文档**：`docs/*.zh-CN.md` 提供了与英文版一一对应的[使用与 API 参考](docs/usage-guide.zh-CN.md)
+  与[格式规范](docs/clx-format-spec.zh-CN.md)（中英文版本需保持同步）。
 
 ```
 pip install .

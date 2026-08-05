@@ -1,5 +1,7 @@
 # Clinx `.clx` File Format Specification
 
+> **中文文档：[《`.clx` 文件格式规范（中文）》](clx-format-spec.zh-CN.md)**
+
 This document describes the binary format of the `.clx` files produced by Clinx
 chemiluminescence imaging instruments, as reverse-engineered and validated by
 the `clxparser` project.

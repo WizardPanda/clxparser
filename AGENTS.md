@@ -12,6 +12,15 @@ instrument `.clx` files (metadata + 16-bit bright-field/fluorescence images).
 - Install without numpy for a metadata/export-only environment:
   `pip install -e . --no-deps`
 
+## Documentation
+
+- Docs live in `docs/`. Every document has an English (`docs/<name>.md`) and a
+  Chinese (`docs/<name>.zh-CN.md`) version that must stay in sync.
+- When editing a doc, update BOTH language versions (and cross-links) in the
+  same commit; keep section structure and values identical, translating only
+  prose. Add the sync note reminder below when touching docs.
+- If a doc changes and the other language was not updated, flag it explicitly.
+
 ## Conventions
 
 - Core parsing, TIFF and PNG export are stdlib-only (struct/datetime/array/

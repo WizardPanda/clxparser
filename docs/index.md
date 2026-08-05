@@ -4,6 +4,8 @@ A lightweight, dependency-minimal Python library and CLI for parsing **Clinx
 chemiluminescence instrument `.clx` captures** — metadata plus the raw 16-bit
 fluorescence and bright-field images.
 
+> **中文文档：[clxparser 文档（中文）](index.zh-CN.md)**
+
 ## Documents
 
 - **[Usage & API reference](usage-guide.md)** — installation, complete Python

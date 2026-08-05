@@ -1,5 +1,7 @@
 # clxparser Usage & API Reference
 
+> **中文文档：[clxparser 使用与 API 参考（中文）](usage-guide.zh-CN.md)**
+
 `clxparser` is a Python library and command-line tool for reading Clinx
 chemiluminescence instrument `.clx` captures. This guide covers installation,
 the complete public API, the CLI, export formats, and troubleshooting.
