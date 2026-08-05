@@ -147,6 +147,12 @@ self-contained decoder (no Pillow required).
 
 ## Notes & caveats
 
+- **Reverse-engineered format.** This library was developed by reverse
+  engineering a small number of `.clx` files output by a single device.
+  Although the format is consistent across the available captures, it is **not
+  guaranteed** that it can parse every `.clx` file produced by all Clinx
+  products — other instruments, software versions, or acquisition modes may
+  write a slightly different layout. Validate against your own files first.
 - The descriptor `type` field (2 vs 4) is exposed but its semantics are unknown;
   it is constant within a capture.
 - Only raw, uncompressed 16-bit (and 8/32-bit) images are supported — the only
