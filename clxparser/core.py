@@ -18,8 +18,9 @@ Layout (verified against real instrument captures; little-endian):
         +6  zero padding
 
     [Image descriptor]      34 bytes
-        u16 marker          0xC03E
-        u32 type            2 or 4 observed
+        u16 marker          high byte 0xC0 (low byte varies by capture:
+                            e.g. 0xC03E, 0xC03D)
+        u32 type            2, 3 or 4 observed
         u32 width
         u32 height
         u32 bits_per_sample 16
@@ -36,14 +37,13 @@ Layout (verified against real instrument captures; little-endian):
                             in the observed samples); begins with a statistics
                             header and embeds LUT/settings strings.
 
-Descriptors are located by scanning for the 0xC03E marker and accepting only
-candidates that satisfy internal consistency checks, which makes the parser
-robust to files that embed additional metadata sections.
+Descriptors are located by scanning for the 0xC0 high byte of the marker and
+accepting only candidates that satisfy internal consistency checks, which
+makes the parser robust to files that embed additional metadata sections.
 """
 
 from __future__ import annotations
 
-import array
 import datetime as _dt
 import re
 import struct
@@ -166,7 +166,7 @@ def parse_descriptor(data: bytes, offset: int) -> Optional[ImageDescriptor]:
     """Parse and validate a descriptor candidate at ``offset``.
 
     Returns None when the bytes do not form a plausible descriptor, which
-    filters out the many false 0xC03E occurrences inside raw pixel data.
+    filters out the many false 0xC0 high-byte occurrences inside raw pixel data.
     """
     if offset + DESCRIPTOR_SIZE > len(data):
         return None
@@ -352,21 +352,18 @@ class ClxFile:
         return None
 
     def channel_labels(self) -> Dict[int, str]:
-        """Best-effort channel identification for 2-image captures.
+        """Channel labels for two-image captures.
 
-        Image 0 is the bright field (higher mean intensity) and image 1 the
-        fluorescence/chemiluminescence channel in every capture observed. When
+        The instrument writes images in a stable order: index 0 is the bright
+        field and index 1 the fluorescence/chemiluminescence channel. When
         exactly two images are present this returns ``{0: "brightfield",
-        1: "fluorescence"}`` ordered by mean intensity; otherwise an empty dict.
-        Uses a fast sampled mean so it does not require numpy.
+        1: "fluorescence"}``; otherwise an empty dict.
         """
         if len(self.images) != 2:
             return {}
-        means = [_sampled_mean(img) for img in self.images]
-        bright = 0 if means[0] >= means[1] else 1
         return {
-            bright: "brightfield",
-            1 - bright: "fluorescence",
+            0: "brightfield",
+            1: "fluorescence",
         }
 
     def summary(self) -> str:
@@ -424,25 +421,6 @@ class ClxFile:
             f"<ClxFile {Path(self.path).name!r} {self.image_count} images "
             f"sample={self.sample_name!r}>"
         )
-
-
-_TYPECODE = {8: "B", 16: "H", 32: "I"}
-
-
-def _sampled_mean(image: "ClxImage") -> float:
-    """Fast approximate mean of an image using the stdlib ``array`` module.
-
-    Samples at most ~200k pixels (stride-skipped), so it runs in a few
-    milliseconds and does not pull in numpy.
-    """
-    typecode = _TYPECODE[image.bits_per_sample]
-    samples = array.array(typecode)
-    samples.frombytes(image._pixel_buf)
-    if not samples:
-        return 0.0
-    step = max(1, len(samples) // 200_000)
-    subset = samples[::step]
-    return sum(subset) / len(subset)
 
 
 def _json_safe(value: Any) -> Any:

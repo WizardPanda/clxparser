@@ -104,12 +104,13 @@ Little-endian throughout. Layout of a capture:
 | *per image* | 34 | descriptor | see below |
 | *per image* | n | pixel data | raw `uint16` little-endian, row-major |
 
-Image descriptor (34 bytes), located by scanning for the `0xC03E` marker and
-validating the fields:
+Image descriptor (34 bytes), located by scanning for the `0xC0` high-byte
+marker (the low byte varies by capture, e.g. `0xC03E`/`0xC03D`) and validating
+the fields:
 
 ```
-u16 marker        0xC03E
-u32 type          2 or 4 (file-level constant)
+u16 marker        high byte 0xC0 (low byte varies by capture)
+u32 type          2, 3 or 4 (file-level constant)
 u32 width
 u32 height
 u32 bits_per_sample   16
@@ -165,13 +166,13 @@ self-contained decoder (no Pillow required).
   guaranteed** that it can parse every `.clx` file produced by all Clinx
   products — other instruments, software versions, or acquisition modes may
   write a slightly different layout. Validate against your own files first.
-- The descriptor `type` field (2 vs 4) is exposed but its semantics are unknown;
+- The descriptor `type` field (2/3/4) is exposed but its semantics are unknown;
   it is constant within a capture.
 - Only raw, uncompressed 16-bit (and 8/32-bit) images are supported — the only
   layout observed in real captures.
-- Channel identification (`brightfield` vs `fluorescence`) is a heuristic based
-  on mean intensity and should not be trusted for downstream decisions if your
-  acquisition settings vary.
+- Channel order is stable: image `0` is the bright field, image `1` the
+  fluorescence/chemiluminescence channel (matching the instrument's own
+  exports). `channel_labels()` returns this mapping for two-image captures.
 
 ## License
 

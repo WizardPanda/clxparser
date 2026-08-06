@@ -100,7 +100,7 @@ The parsed capture.
 | `raw_trailer_info` | `dict` | Partially decoded trailer header/strings |
 | `image_count` | `int` (property) | `len(images)` |
 | `image_type` | `int \| None` (property) | The per-file image `type` constant |
-| `channel_labels()` | `dict[int, str]` | `{idx: "brightfield"\|"fluorescence"}` heuristic |
+| `channel_labels()` | `dict[int, str]` | `{0: "brightfield", 1: "fluorescence"}` for two-image captures, else `{}` |
 | `summary()` | `str` | Human-readable multi-line summary |
 | `to_dict()` | `dict` | JSON-serializable metadata |
 
@@ -153,7 +153,7 @@ Subclass of `ValueError`, raised for invalid/unsupported files.
 | `parse_trailer_info(trailer, exposure_ms)` | Best-effort trailer decode |
 
 Constants: `MAGIC`, `HEADER_SIZE`, `VERSION_BLOCK_SIZE`, `BUILD_DATE_SIZE`,
-`DESCRIPTOR_SIZE` (34), `DESCRIPTOR_MARKER` (`0xC03E`), `MAX_DIMENSION`.
+`DESCRIPTOR_SIZE` (34), `DESCRIPTOR_MARKER` (high byte `0xC0`), `MAX_DIMENSION`.
 
 ### 3.6 `clxparser.tiff` — TIFF writer
 
@@ -342,8 +342,9 @@ export_images(f, outdir="exports", formats=("png", "json"), preview=True)
   only when pixel arrays or previews are requested.
 - **Eager reads.** Files are read fully into memory at parse time (simplest and
   fast for instrument-scale files, which are a few MB).
-- **Channel labels are a heuristic** based on mean intensity and may be wrong if
-  acquisition settings vary; rely on the index order for reproducibility.
+- **Channel order is stable**: image `0` is the bright field, image `1` the
+  fluorescence/chemiluminescence channel, matching the instrument's own exports.
+  `channel_labels()` returns this mapping for two-image captures.
 - **Format is reverse-engineered** from a small number of files; see the
   portability warning in the [format spec](clx-format-spec.md).
 

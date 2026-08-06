@@ -122,8 +122,8 @@ raw pixel data.
 
 | Offset | Size | Type | Field | Meaning |
 |---|---|---|---|---|
-| `0x00` | 2 | `u16` | `marker` | `0xC03E` — identifies a descriptor |
-| `0x02` | 4 | `u32` | `type` | Image type constant, `2` or `4` |
+| `0x00` | 2 | `u16` | `marker` | High byte `0xC0` identifies a descriptor; low byte varies by capture (`0x3E`/`0x3D` observed) |
+| `0x02` | 4 | `u32` | `type` | Image type constant, `2`, `3` or `4` |
 | `0x06` | 4 | `u32` | `width` | Image width in pixels |
 | `0x0A` | 4 | `u32` | `height` | Image height in pixels |
 | `0x0E` | 4 | `u32` | `bits_per_sample` | Bit depth, `16` |
@@ -155,8 +155,9 @@ variant, or camera configuration.
 
 Because the descriptor position is tied to a fixed header layout that may differ
 between software versions, `clxparser` does **not** rely on hard-coded offsets.
-Instead it scans the file for the `0xC03E` marker and keeps only candidates
-that satisfy all of:
+Instead it scans the file for the descriptor marker — any `u16` whose high byte
+is `0xC0` (the low byte varies by capture, e.g. `0xC03E` and `0xC03D`) — and
+keeps only candidates that satisfy all of:
 
 1. `1 ≤ width ≤ 8192` and `1 ≤ height ≤ 8192`;
 2. `bits_per_sample ∈ {8, 16, 32}`;
@@ -183,15 +184,18 @@ TIFFs (verified for all four exported images in the test suite).
 
 ### 5.1 Channels
 
-Every observed capture contains two images in a stable order:
+Every observed capture contains two images in a **stable order**:
 
 | Index | Channel | Characteristics |
 |---|---|---|
-| `0` | Bright field | Higher mean / variance (evenly illuminated) |
+| `0` | Bright field | Evenly illuminated |
 | `1` | Fluorescence / chemiluminescence | Darker background with signal |
 
-`clxparser` does not hard-code this; `ClxFile.channel_labels()` assigns the
-labels by comparing mean intensities when exactly two images are present.
+The order matches the instrument software's own export and is identical across
+every observed capture, so `ClxFile.channel_labels()` returns
+`{0: "brightfield", 1: "fluorescence"}` for two-image captures. The descriptor
+`type` field is a per-capture mode constant (2/3/4 observed) and does not
+identify the channel.
 
 ---
 
@@ -269,7 +273,7 @@ build 2023-12-28), at different binning/exposure settings.
 
 The following are documented but not fully understood:
 
-- **`type` field** (2 vs 4) — constant per capture; meaning unknown.
+- **`type` field** (2/3/4) — constant per capture; meaning unknown.
 - **Header `field_1` / `field_2`** (both `6`) — unknown.
 - **Opaque header/trailer regions** — contain un-relocated heap pointers.
 - **Descriptor `reserved`** field — always `0`.

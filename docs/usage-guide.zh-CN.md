@@ -96,7 +96,7 @@ f = clxparser.load("capture.clx")
 | `raw_trailer_info` | `dict` | 部分解码的尾部头部/字符串 |
 | `image_count` | `int`（属性） | `len(images)` |
 | `image_type` | `int \| None`（属性） | 每文件图像 `type` 常量 |
-| `channel_labels()` | `dict[int, str]` | `{idx: "brightfield"\|"fluorescence"}` 启发式 |
+| `channel_labels()` | `dict[int, str]` | 两张图像时返回 `{0: "brightfield", 1: "fluorescence"}`，否则 `{}` |
 | `summary()` | `str` | 人类可读的多行摘要 |
 | `to_dict()` | `dict` | JSON 可序列化的元数据 |
 
@@ -149,7 +149,7 @@ f = clxparser.load("capture.clx")
 | `parse_trailer_info(trailer, exposure_ms)` | 尽力解码尾部数据 |
 
 常量：`MAGIC`、`HEADER_SIZE`、`VERSION_BLOCK_SIZE`、`BUILD_DATE_SIZE`、
-`DESCRIPTOR_SIZE`（34）、`DESCRIPTOR_MARKER`（`0xC03E`）、`MAX_DIMENSION`。
+`DESCRIPTOR_SIZE`（34）、`DESCRIPTOR_MARKER`（高字节 `0xC0`）、`MAX_DIMENSION`。
 
 ### 3.6 `clxparser.tiff` —— TIFF 写入器
 
@@ -335,8 +335,8 @@ export_images(f, outdir="exports", formats=("png", "json"), preview=True)
   数组或预览时才加载。
 - **整体读入。** 解析时把文件完整读入内存（对仪器规模的文件——几 MB——最简单
   也最快）。
-- **通道标签是启发式的**，基于平均强度，若采集设置变化可能出错；如需可复现，
-  请依赖索引顺序。
+- **通道顺序稳定**：图像 `0` 为明场，图像 `1` 为荧光/化学发光通道，与仪器
+  自身导出顺序一致。`channel_labels()` 对两张图像的采集返回该映射。
 - **格式是逆向工程的**，来自少量文件；详见[格式规范](clx-format-spec.zh-CN.md)
   中的可移植性警告。
 
