@@ -56,7 +56,9 @@ HEADER_SIZE = 0x0124
 VERSION_BLOCK_SIZE = 0x0104  # u32 version + char[0x100] software
 BUILD_DATE_SIZE = 0x0100
 DESCRIPTOR_SIZE = 34
-DESCRIPTOR_MARKER = 0xC03E
+# Descriptor marker: the high byte 0xC0 is stable; the low byte varies by
+# capture (0x3E and 0x3D observed), so only the high byte is validated.
+DESCRIPTOR_MARKER = 0xC000
 MAX_DIMENSION = 8192
 OLE_EPOCH = _dt.datetime(1899, 12, 30)
 
@@ -171,7 +173,7 @@ def parse_descriptor(data: bytes, offset: int) -> Optional[ImageDescriptor]:
     marker, itype, width, height, bits, mx, mn, byte_count, reserved = (
         struct.unpack_from("<HIIIIIIII", data, offset)
     )
-    if marker != DESCRIPTOR_MARKER:
+    if (marker & 0xFF00) != 0xC000:  # high byte 0xC0 identifies a descriptor
         return None
     if not (1 <= width <= MAX_DIMENSION and 1 <= height <= MAX_DIMENSION):
         return None
@@ -201,13 +203,13 @@ def find_descriptors(data: bytes) -> List[ImageDescriptor]:
     found: List[ImageDescriptor] = []
     start = 0
     while True:
-        idx = data.find(b"\x3e\xc0", start)
-        if idx < 0:
+        idx = data.find(b"\xc0", start)
+        if idx < 1:
             break
-        desc = parse_descriptor(data, idx)
+        desc = parse_descriptor(data, idx - 1)
         if desc is not None:
             found.append(desc)
-        start = idx + 2
+        start = idx + 1
     return found
 
 
