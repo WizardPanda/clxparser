@@ -8,10 +8,11 @@ Layout (verified against real instrument captures; little-endian):
         0x0008  u32  unknown                  6 (constant)
         0x000C  f64  capture_time             OLE Automation Date
         0x0014  u32  exposure_ms
-        0x0018  char[] sample_name             null-terminated ASCII, variable
-                                               length (bounded by the Windows
-                                               filename length, not the format)
-        after NUL  opaque                      leftover C++ heap pointers
+        0x0018  char[0x100] sample_name       null-terminated ASCII (fixed
+                                               256-byte field; name bounded in
+                                               practice by the Windows filename
+                                               length)
+        after NUL  (garbage)                   uninitialized bytes inside field
 
     [Version block]         0x0124 (repeated before every image)
         0x0000  u32  format_version           3
@@ -486,7 +487,7 @@ def parse(data: bytes, path: str = "") -> ClxFile:
 
     capture_time = ole_to_datetime(struct.unpack_from("<d", data, 0x0C)[0])
     exposure_ms = struct.unpack_from("<I", data, 0x14)[0]
-    sample_name = _read_cstr(data, 0x18, HEADER_SIZE - 0x18)
+    sample_name = _read_cstr(data, 0x18, 0x100)
     format_version = struct.unpack_from("<I", data, 0x0124)[0]
     software = _read_cstr(data, 0x0128, 0x100)
     build_date_text = _read_cstr(data, 0x0228, 0x100)
