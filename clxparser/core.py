@@ -472,40 +472,44 @@ def parse_trailer_info(trailer: bytes, exposure_ms: int) -> Dict[str, Any]:
 
 
 # Offsets within a per-image block, as serialized by TSampleImage (reverse-
-# engineered from the official Clx695 software).
+# engineered from the official Clx695 software). The V1 image block layout is
+# stable across format versions; the version word only controls how many extra
+# V2/V3 sections follow (all after the images), so it is not used to locate
+# images.
 IMG_BLOCK_SIZE = 0x22C  # version(4) + name(0x100) + build(0x100) + descriptor(40)
 
 
 def _read_official_images(data: bytes):
     """Read images at the known fixed offsets (the "official" reader).
 
-    Returns ``(images, trailer_start)`` on success, or ``None`` when the layout
-    does not match, so the caller falls back to the structural-invariant scan.
+    An image block is recognised by its descriptor's structural invariants
+    (byte_count == width * height * bits // 8, etc.), not by the version word, so
+    it works for any format version whose V1 image layout is the same. Returns
+    ``(images, trailer_start)`` on success, or ``None`` when the layout does not
+    match, so the caller falls back to the structural-invariant scan.
     """
     images: List[ClxImage] = []
     pos = HEADER_SIZE
     n = len(data)
     while pos + IMG_BLOCK_SIZE <= n:
-        version = struct.unpack_from("<I", data, pos)[0]
-        if version != 3:  # trailer or an unknown format version
-            break
         width = struct.unpack_from("<I", data, pos + 0x210)[0]
         height = struct.unpack_from("<I", data, pos + 0x214)[0]
         bits = struct.unpack_from("<I", data, pos + 0x218)[0]
         mx = struct.unpack_from("<I", data, pos + 0x21C)[0]
         mn = struct.unpack_from("<I", data, pos + 0x220)[0]
         byte_count = struct.unpack_from("<Q", data, pos + 0x224)[0]
-        if not (1 <= width <= MAX_DIMENSION and 1 <= height <= MAX_DIMENSION):
-            return None
-        if bits not in (8, 16, 32):
-            return None
-        if byte_count != width * height * bits // 8:
-            return None
-        full_scale = (1 << bits) - 1
-        if not (0 <= mn <= mx <= full_scale):
-            return None
-        if pos + IMG_BLOCK_SIZE + byte_count > n:
-            return None
+        valid = (
+            1 <= width <= MAX_DIMENSION
+            and 1 <= height <= MAX_DIMENSION
+            and bits in (8, 16, 32)
+            and byte_count == width * height * bits // 8
+            and 0 <= mn <= mx <= (1 << bits) - 1
+            and pos + IMG_BLOCK_SIZE + byte_count <= n
+        )
+        if not valid:
+            if not images:
+                return None  # first block is not an image: wrong layout
+            break  # trailer follows the last image
         itype = struct.unpack_from("<I", data, pos + 0x20C)[0]
         # Keep the descriptor offset on the 2-byte tag so pixel_offset() lands
         # exactly on the pixel data, matching the scan fallback byte-for-byte.
