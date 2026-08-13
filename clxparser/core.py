@@ -471,6 +471,68 @@ def parse_trailer_info(trailer: bytes, exposure_ms: int) -> Dict[str, Any]:
     return info
 
 
+# Offsets within a per-image block, as serialized by TSampleImage (reverse-
+# engineered from the official Clx695 software).
+IMG_BLOCK_SIZE = 0x22C  # version(4) + name(0x100) + build(0x100) + descriptor(40)
+
+
+def _read_official_images(data: bytes):
+    """Read images at the known fixed offsets (the "official" reader).
+
+    Returns ``(images, trailer_start)`` on success, or ``None`` when the layout
+    does not match, so the caller falls back to the structural-invariant scan.
+    """
+    images: List[ClxImage] = []
+    pos = HEADER_SIZE
+    n = len(data)
+    while pos + IMG_BLOCK_SIZE <= n:
+        version = struct.unpack_from("<I", data, pos)[0]
+        if version != 3:  # trailer or an unknown format version
+            break
+        width = struct.unpack_from("<I", data, pos + 0x210)[0]
+        height = struct.unpack_from("<I", data, pos + 0x214)[0]
+        bits = struct.unpack_from("<I", data, pos + 0x218)[0]
+        mx = struct.unpack_from("<I", data, pos + 0x21C)[0]
+        mn = struct.unpack_from("<I", data, pos + 0x220)[0]
+        byte_count = struct.unpack_from("<Q", data, pos + 0x224)[0]
+        if not (1 <= width <= MAX_DIMENSION and 1 <= height <= MAX_DIMENSION):
+            return None
+        if bits not in (8, 16, 32):
+            return None
+        if byte_count != width * height * bits // 8:
+            return None
+        full_scale = (1 << bits) - 1
+        if not (0 <= mn <= mx <= full_scale):
+            return None
+        if pos + IMG_BLOCK_SIZE + byte_count > n:
+            return None
+        itype = struct.unpack_from("<I", data, pos + 0x20C)[0]
+        # Keep the descriptor offset on the 2-byte tag so pixel_offset() lands
+        # exactly on the pixel data, matching the scan fallback byte-for-byte.
+        desc = ImageDescriptor(
+            offset=pos + IMG_BLOCK_SIZE - DESCRIPTOR_SIZE,
+            type=itype,
+            width=width,
+            height=height,
+            bits_per_sample=bits,
+            max_value=mx,
+            min_value=mn,
+            byte_count=byte_count,
+        )
+        start = pos + IMG_BLOCK_SIZE
+        images.append(
+            ClxImage(
+                index=len(images),
+                descriptor=desc,
+                _pixel_buf=bytearray(data[start : start + byte_count]),
+            )
+        )
+        pos += IMG_BLOCK_SIZE + byte_count
+    if not images:
+        return None
+    return images, pos
+
+
 def parse(data: bytes, path: str = "") -> ClxFile:
     """Parse raw .clx bytes into a :class:`ClxFile`."""
     if len(data) < HEADER_SIZE + DESCRIPTOR_SIZE:
@@ -493,22 +555,31 @@ def parse(data: bytes, path: str = "") -> ClxFile:
     build_date_text = _read_cstr(data, 0x0228, 0x100)
     build_datetime = parse_build_date(build_date_text)
 
-    descriptors = find_descriptors(data)
-    if not descriptors:
-        raise FormatError("no valid image descriptors found in file")
+    official = _read_official_images(data)
+    if official is not None:
+        images, trailer_start = official
+        images = tuple(images)
+        trailer = data[trailer_start:]
+    else:
+        descriptors = find_descriptors(data)
+        if not descriptors:
+            raise FormatError("no valid image descriptors found in file")
 
-    images: List[ClxImage] = []
-    for index, desc in enumerate(descriptors):
-        start = desc.pixel_offset
-        end = start + desc.byte_count
-        images.append(
-            ClxImage(
-                index=index, descriptor=desc, _pixel_buf=bytearray(data[start:end])
+        images: List[ClxImage] = []
+        for index, desc in enumerate(descriptors):
+            start = desc.pixel_offset
+            end = start + desc.byte_count
+            images.append(
+                ClxImage(
+                    index=index,
+                    descriptor=desc,
+                    _pixel_buf=bytearray(data[start:end]),
+                )
             )
-        )
 
-    last_end = descriptors[-1].pixel_offset + descriptors[-1].byte_count
-    trailer = data[last_end:]
+        last_end = descriptors[-1].pixel_offset + descriptors[-1].byte_count
+        images = tuple(images)
+        trailer = data[last_end:]
 
     return ClxFile(
         path=str(path),
@@ -520,7 +591,7 @@ def parse(data: bytes, path: str = "") -> ClxFile:
         capture_time=capture_time,
         exposure_ms=exposure_ms,
         filename_info=parse_filename(path),
-        images=tuple(images),
+        images=images,
         trailer=trailer,
         raw_header=bytes(data[:HEADER_SIZE]),
         raw_trailer_info=parse_trailer_info(trailer, exposure_ms),
