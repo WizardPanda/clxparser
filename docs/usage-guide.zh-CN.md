@@ -149,7 +149,7 @@ f = clxparser.load("capture.clx")
 | `parse_trailer_info(trailer, exposure_ms)` | 尽力解码尾部数据 |
 
 常量：`MAGIC`、`HEADER_SIZE`、`VERSION_BLOCK_SIZE`、`BUILD_DATE_SIZE`、
-`DESCRIPTOR_SIZE`（34）、`DESCRIPTOR_MARKER`（高字节 `0xC0`）、`MAX_DIMENSION`。
+`DESCRIPTOR_SIZE`（34）、`MAX_DIMENSION`。
 
 ### 3.6 `clxparser.tiff` —— TIFF 写入器
 

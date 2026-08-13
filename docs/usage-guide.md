@@ -153,7 +153,7 @@ Subclass of `ValueError`, raised for invalid/unsupported files.
 | `parse_trailer_info(trailer, exposure_ms)` | Best-effort trailer decode |
 
 Constants: `MAGIC`, `HEADER_SIZE`, `VERSION_BLOCK_SIZE`, `BUILD_DATE_SIZE`,
-`DESCRIPTOR_SIZE` (34), `DESCRIPTOR_MARKER` (high byte `0xC0`), `MAX_DIMENSION`.
+`DESCRIPTOR_SIZE` (34), `MAX_DIMENSION`.
 
 ### 3.6 `clxparser.tiff` — TIFF writer
 

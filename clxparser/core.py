@@ -8,8 +8,10 @@ Layout (verified against real instrument captures; little-endian):
         0x0008  u32  unknown                  6 (constant)
         0x000C  f64  capture_time             OLE Automation Date
         0x0014  u32  exposure_ms
-        0x0018  char[22] sample_name          null-padded ASCII
-        0x002E - 0x0123  opaque                leftover C++ heap pointers
+        0x0018  char[] sample_name             null-terminated ASCII, variable
+                                               length (bounded by the Windows
+                                               filename length, not the format)
+        after NUL  opaque                      leftover C++ heap pointers
 
     [Version block]         0x0124 (repeated before every image)
         0x0000  u32  format_version           3
@@ -18,9 +20,9 @@ Layout (verified against real instrument captures; little-endian):
         +6  zero padding
 
     [Image descriptor]      34 bytes
-        u16 marker          high byte 0xC0 (low byte varies by capture:
-                            e.g. 0xC03E, 0xC03D)
-        u32 type            2, 3 or 4 observed
+        u16 tag             leading 2-byte field; varies in BOTH bytes
+                            (0xC03E, 0xC03D, 0x403E observed), not a marker
+        u32 type            1, 2, 3 or 4 observed
         u32 width
         u32 height
         u32 bits_per_sample 16
@@ -37,9 +39,11 @@ Layout (verified against real instrument captures; little-endian):
                             in the observed samples); begins with a statistics
                             header and embeds LUT/settings strings.
 
-Descriptors are located by scanning for the 0xC0 high byte of the marker and
-accepting only candidates that satisfy internal consistency checks, which
-makes the parser robust to files that embed additional metadata sections.
+Descriptors are located by scanning every byte offset and accepting only
+candidates that satisfy structural invariants (dimension bounds, bit depth,
+byte_count == width*height*bits/8, min/max bounds, in-file bounds), which makes
+the parser robust to files that embed additional metadata sections and does not
+depend on a stable marker byte.
 """
 
 from __future__ import annotations
@@ -56,9 +60,6 @@ HEADER_SIZE = 0x0124
 VERSION_BLOCK_SIZE = 0x0104  # u32 version + char[0x100] software
 BUILD_DATE_SIZE = 0x0100
 DESCRIPTOR_SIZE = 34
-# Descriptor marker: the high byte 0xC0 is stable; the low byte varies by
-# capture (0x3E and 0x3D observed), so only the high byte is validated.
-DESCRIPTOR_MARKER = 0xC000
 MAX_DIMENSION = 8192
 OLE_EPOCH = _dt.datetime(1899, 12, 30)
 
@@ -165,16 +166,16 @@ class ImageDescriptor:
 def parse_descriptor(data: bytes, offset: int) -> Optional[ImageDescriptor]:
     """Parse and validate a descriptor candidate at ``offset``.
 
-    Returns None when the bytes do not form a plausible descriptor, which
-    filters out the many false 0xC0 high-byte occurrences inside raw pixel data.
+    Returns None when the bytes do not form a plausible descriptor. The leading
+    2-byte field is not a reliable marker (high byte 0xC0/0x40, low byte
+    0x3E/0x3D all observed), so descriptors are identified purely by their
+    structural invariants; the most selective fields are checked first.
     """
     if offset + DESCRIPTOR_SIZE > len(data):
         return None
-    marker, itype, width, height, bits, mx, mn, byte_count, reserved = (
-        struct.unpack_from("<HIIIIIIII", data, offset)
+    width, height, bits, mx, mn, byte_count = struct.unpack_from(
+        "<IIIIII", data, offset + 6
     )
-    if (marker & 0xFF00) != 0xC000:  # high byte 0xC0 identifies a descriptor
-        return None
     if not (1 <= width <= MAX_DIMENSION and 1 <= height <= MAX_DIMENSION):
         return None
     if bits not in (8, 16, 32):
@@ -186,6 +187,7 @@ def parse_descriptor(data: bytes, offset: int) -> Optional[ImageDescriptor]:
         return None
     if offset + DESCRIPTOR_SIZE + byte_count > len(data):
         return None
+    (itype,) = struct.unpack_from("<I", data, offset + 2)
     return ImageDescriptor(
         offset=offset,
         type=itype,
@@ -199,17 +201,26 @@ def parse_descriptor(data: bytes, offset: int) -> Optional[ImageDescriptor]:
 
 
 def find_descriptors(data: bytes) -> List[ImageDescriptor]:
-    """Find every valid image descriptor in the file."""
+    """Find every valid image descriptor in the file.
+
+    Scans every byte offset; the descriptor is recognised by its structural
+    invariants, not by a marker byte. A cheap byte-level pre-filter skips the
+    vast majority of offsets without a full ``struct.unpack``.
+    """
     found: List[ImageDescriptor] = []
-    start = 0
-    while True:
-        idx = data.find(b"\xc0", start)
-        if idx < 1:
-            break
-        desc = parse_descriptor(data, idx - 1)
+    n = len(data)
+    if n < DESCRIPTOR_SIZE:
+        return found
+    # width is a u32 at offset+6 and must be < 8192, so its upper two bytes are
+    # zero and the next byte is < 0x20. This rejects almost every pixel-data
+    # offset with three byte reads before calling parse_descriptor.
+    stop = n - DESCRIPTOR_SIZE + 1
+    for offset in range(stop):
+        if data[offset + 8] != 0 or data[offset + 9] != 0 or data[offset + 7] >= 0x20:
+            continue
+        desc = parse_descriptor(data, offset)
         if desc is not None:
             found.append(desc)
-        start = idx + 1
     return found
 
 
@@ -475,7 +486,7 @@ def parse(data: bytes, path: str = "") -> ClxFile:
 
     capture_time = ole_to_datetime(struct.unpack_from("<d", data, 0x0C)[0])
     exposure_ms = struct.unpack_from("<I", data, 0x14)[0]
-    sample_name = _read_cstr(data, 0x18, 22)
+    sample_name = _read_cstr(data, 0x18, HEADER_SIZE - 0x18)
     format_version = struct.unpack_from("<I", data, 0x0124)[0]
     software = _read_cstr(data, 0x0128, 0x100)
     build_date_text = _read_cstr(data, 0x0228, 0x100)
